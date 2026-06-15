@@ -41,22 +41,38 @@ my $LIMIT = 100;
             }
 
             my $sql = qq{
-                SELECT l.int_id,
-                       l.created AS log_created,
-                       l.str    AS log_str
-                FROM log l
-                WHERE l.address = ?
-                ORDER BY l.int_id, l.created
+                SELECT created, str
+                FROM (
+                    SELECT m.created, m.int_id, m.str
+                    FROM message m
+                    WHERE m.int_id IN (
+                        SELECT DISTINCT l.int_id
+                        FROM log l
+                        WHERE l.address = ?
+                    )
+
+                    UNION ALL
+
+                    SELECT l.created, l.int_id, l.str
+                    FROM log l
+                    WHERE l.address = ?
+                ) t
+                ORDER BY int_id, created
                 LIMIT ?
             };
 
-            my $sth = $dbh->prepare($sql);
-            $sth->execute($addr, $LIMIT + 1);
+            my $sth = $dbh->prepare($sql) or die $dbh->errstr;
+            $sth->execute($addr, $addr, $LIMIT + 1) or die $sth->errstr;
 
             my @rows;
             while (my $r = $sth->fetchrow_hashref) {
                 push @rows, $r;
             }
+
+            for my $r (@rows) {
+                print $r->{created}, " ", $r->{str}, "<br>\n";
+            }
+            
             $sth->finish;
             $dbh->disconnect;
 
